@@ -65,7 +65,7 @@ if uploaded_file is not None:
 
             try:
                 if face_crop.size > 0:
-                    res = DeepFace.analyze(face_crop, actions=['emotion'], enforce_detection=False)
+                    res = DeepFace.analyze(face_crop, actions=['emotion'],detector_backend = 'retinaface', enforce_detection=False, align = True)
                     dominant_emo = res[0]['dominant_emotion']
                     score = res[0]['emotion'][dominant_emo]
                     
