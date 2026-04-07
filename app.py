@@ -6,11 +6,21 @@ from PIL import Image
 import numpy as np
 import plotly.graph_objects as go
 
-# --- 初始化 MediaPipe ---
+# --- 初始化與翻譯配置 ---
 mp_face_detection = mp.solutions.face_detection
 
-st.set_page_config(layout="wide", page_title="憂鬱程度 AI 檢測系統")
+# 情緒翻譯字典
+emotion_translation = {
+    'angry': '憤怒',
+    'disgust': '厭惡',
+    'fear': '恐懼',
+    'happy': '開心',
+    'sad': '悲傷',
+    'surprise': '驚訝',
+    'neutral': '中性'
+}
 
+st.set_page_config(layout="wide", page_title="憂鬱程度 AI 檢測系統")
 st.title("🧠 臉部表情與 PHQ-9 憂鬱量表整合展示")
 
 # 建立左右兩欄
@@ -19,23 +29,14 @@ col1, col2 = st.columns([1, 1.2], gap="large")
 # --- 左側：影像上傳與完整問卷 ---
 with col1:
     st.subheader("📋 數據輸入區")
-    
-    # 1. 影像上傳
     uploaded_file = st.file_uploader("上傳面部正面照片", type=['jpg', 'jpeg', 'png'])
     
     st.divider()
-    
-    # 2. PHQ-9 完整問卷 (不摺疊)
     st.write("**請根據過去兩週的感受回答：**")
     questions = [
-        "做事提不起勁或沒有興趣", 
-        "感到心情低落、沮喪或絕望", 
-        "入睡困難、睡不安穩或睡太多",
-        "感到疲倦或缺乏體力", 
-        "胃口不好或吃太多", 
-        "覺得自己很糟、或覺得自己很失敗",
-        "專注困難（如看報紙或看電視時）", 
-        "動作或說話速度緩慢/太快到別人都注意到了",
+        "做事提不起勁或沒有興趣", "感到心情低落、沮喪或絕望", "入睡困難、睡不安穩或睡太多",
+        "感到疲倦或缺乏體力", "胃口不好或吃太多", "覺得自己很糟、或覺得自己很失敗",
+        "專注困難（如看報紙或看電視時）", "動作或說話速度緩慢/太快到別人都注意到了",
         "有想要傷害自己或自殺的想法"
     ]
     options = {"完全沒有": 0, "幾天": 1, "一半以上": 2, "幾乎天天": 3}
@@ -46,7 +47,6 @@ with col1:
         phq9_scores.append(options[res])
     
     total_phq9 = sum(phq9_scores)
-    
     st.divider()
     submit = st.button("🚀 執行 AI 辨識分析", type="primary", use_container_width=True)
 
@@ -55,7 +55,6 @@ with col2:
     st.subheader("📊 檢測結果對照")
     
     if uploaded_file is not None:
-        # 顯示原始上傳圖片
         image_pil = Image.open(uploaded_file)
         st.image(image_pil, caption="您上傳的照片", use_container_width=True)
         
@@ -65,7 +64,6 @@ with col2:
             h, w, _ = img_bgr.shape
 
             with st.spinner('AI 正在分析面部與數據...'):
-                # 1. MediaPipe 臉部偵測與裁切
                 with mp_face_detection.FaceDetection(model_selection=1, min_detection_confidence=0.5) as face_detection:
                     results_mp = face_detection.process(cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB))
                     
@@ -74,12 +72,10 @@ with col2:
                         bbox = det.location_data.relative_bounding_box
                         x, y, gw, gh = int(bbox.xmin*w), int(bbox.ymin*h), int(bbox.width*w), int(bbox.height*h)
                         
-                        # 增加裁切邊距以便 DeepFace align
                         margin = int(gw * 0.2)
                         face_crop = img_bgr[max(0, y-margin):min(h, y+gh+margin), max(0, x-margin):min(w, x+gw+margin)]
                         
                         try:
-                            # 2. DeepFace 情緒辨識 (使用指定參數)
                             results_df = DeepFace.analyze(
                                 face_crop, 
                                 actions=['emotion'], 
@@ -88,28 +84,31 @@ with col2:
                                 align=True
                             )
                             
-                            emo_data = results_df[0]['emotion']
-                            dominant_emotion = results_df[0]['dominant_emotion']
-                            sad_prob = emo_data['sad']
+                            raw_emo_data = results_df[0]['emotion']
+                            raw_dominant = results_df[0]['dominant_emotion']
+                            
+                            # --- 關鍵步驟：進行中文翻譯 ---
+                            zh_dominant = emotion_translation.get(raw_dominant, raw_dominant)
+                            zh_emo_data = {emotion_translation.get(k, k): v for k, v in raw_emo_data.items()}
                             
                             # 3. 顯示量化分數指標
                             st.success("分析完成！數據對照如下：")
                             m1, m2, m3 = st.columns(3)
                             m1.metric("PHQ-9 總分", f"{total_phq9} / 27")
-                            m2.metric("主要辨識情緒", f"{dominant_emotion.capitalize()}")
-                            m3.metric("AI 悲傷概率", f"{sad_prob:.1f} %")
+                            m2.metric("主要辨識情緒", f"{zh_dominant}")
+                            m3.metric("AI 悲傷概率", f"{raw_emo_data['sad']:.1f} %")
                             
-                            # 4. 圓餅圖展示
+                            # 4. 圓餅圖展示 (使用中文標籤)
                             fig = go.Figure(data=[go.Pie(
-                                labels=list(emo_data.keys()), 
-                                values=list(emo_data.values()), 
+                                labels=list(zh_emo_data.keys()), 
+                                values=list(zh_emo_data.values()), 
                                 hole=.3,
                                 textinfo='label+percent'
                             )])
-                            fig.update_layout(title="AI 面部情緒成分分析", margin=dict(t=50, b=0, l=0, r=0))
+                            fig.update_layout(title="AI 面部情緒成分分析 (中文)", margin=dict(t=50, b=0, l=0, r=0))
                             st.plotly_chart(fig, use_container_width=True)
                             
-                            # 5. 判斷提示
+                            # 5. 結論建議
                             if total_phq9 >= 10:
                                 st.warning(f"⚠️ **提醒：** 您的 PHQ-9 分數為 {total_phq9}，顯示有中度以上憂鬱傾向，建議諮詢專業醫療人員。")
                             
