@@ -55,12 +55,13 @@ narwhals==2.18.1
 networkx==3.2.1
 numpy==1.23.5
 oauthlib==3.3.1
-opencv-contrib-python-headless==4.8.0.76
+opencv-contrib-python==4.8.0.76
 opt_einsum==3.4.0
 packaging==25.0
 pandas==2.3.3
 pillow==11.3.0
 pip==25.2
+plotly==6.6.0
 protobuf==3.20.3
 pyarrow==21.0.0
 pyasn1==0.6.3
@@ -94,7 +95,7 @@ tensorflow-estimator==2.12.0
 tensorflow-io-gcs-filesystem==0.37.1
 termcolor==3.1.0
 toml==0.10.2
-torch==2.0.1
+torch==2.0.1+cpu
 tornado==6.5.5
 tqdm==4.67.3
 typing_extensions==4.15.0
